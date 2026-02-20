@@ -1908,7 +1908,10 @@ function checkSelection() {
   const range = sel.getRangeAt(0);
   const content = document.getElementById('content');
   const ancestor = range.commonAncestorContainer;
-  if (!content.contains(ancestor)) {
+  // content.contains(ancestor) handles the normal case.
+  // range.intersectsNode(content) handles triple-clicking the last paragraph,
+  // where the browser extends endContainer outside #content.
+  if (!content.contains(ancestor) && !range.intersectsNode(content)) {
     hideAnnotationToolbar();
     return;
   }
