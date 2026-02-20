@@ -7,7 +7,7 @@ A focused markdown reader for your phone. Drop in a `.md` file or paste a URL an
 ## What it does
 
 - Renders any Markdown file with beautiful typography (Lora serif, proper line heights, generous whitespace)
-- Supports syntax highlighting, Mermaid diagrams, YAML frontmatter, and GitHub Flavored Markdown
+- Supports syntax highlighting, Mermaid diagrams, YAML frontmatter, and GitHub Flavored Markdown — see the [feature tour](https://dereklucas.github.io/reader?url=https://raw.githubusercontent.com/dereklucas/reader/main/examples/features.md) for examples
 - Works offline after first load — nothing leaves your device
 - Three themes: Light, Sepia, and Dark
 - Adjustable font size, line width, and font choice
@@ -23,10 +23,18 @@ Open the link above on your phone or desktop. Then either:
 2. **Paste a URL** — paste a raw markdown URL (GitHub links are auto-converted) and hit Go
 3. **Link directly** — append `?url=` to load a document on open, e.g.:
    ```
-   https://dereklucas.github.io/reader?url=https://raw.githubusercontent.com/user/repo/main/README.md
+   https://dereklucas.github.io/reader?url=https://raw.githubusercontent.com/dereklucas/reader/main/README.md
    ```
 
 Your reading preferences (theme, font size, line width) are saved locally and persist between sessions.
+
+## Examples
+
+Try these in Reader to see what it can do:
+
+- [Feature tour](https://dereklucas.github.io/reader?url=https://raw.githubusercontent.com/dereklucas/reader/main/examples/features.md) — syntax highlighting, Mermaid diagrams, tables, task lists, frontmatter
+- [Essay](https://dereklucas.github.io/reader?url=https://raw.githubusercontent.com/dereklucas/reader/main/examples/essay.md) — long-form reading with drop caps and typographic details
+- [This README](https://dereklucas.github.io/reader?url=https://raw.githubusercontent.com/dereklucas/reader/main/README.md)
 
 ## It's one file
 
