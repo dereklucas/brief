@@ -1922,7 +1922,15 @@ function checkSelection() {
 }
 
 function showAnnotationToolbar(range) {
-  savedRange = range.cloneRange();
+  const content = document.getElementById('content');
+  const clamped = range.cloneRange();
+  if (!content.contains(range.endContainer)) {
+    clamped.setEnd(content, content.childNodes.length);
+  }
+  if (!content.contains(range.startContainer)) {
+    clamped.setStart(content, 0);
+  }
+  savedRange = clamped;
   const toolbar = document.getElementById('annotation-toolbar');
   const rect = range.getBoundingClientRect();
 
