@@ -49,15 +49,21 @@ function greet(name) {
 greet("Reader");
 ```
 
-```python
-def fibonacci(n):
-    """Generate the first n Fibonacci numbers."""
-    a, b = 0, 1
-    for _ in range(n):
-        yield a
-        a, b = b, a + b
+```ruby
+class BookShelf
+  include Enumerable
 
-print(list(fibonacci(10)))
+  def initialize = @books = []
+
+  def <<(book) = tap { @books << book }
+
+  def each(&) = @books.sort_by(&:title).each(&)
+
+  def by(author) = select { _1.author == author }
+end
+
+shelf = BookShelf.new << Book.new("Dune", "Herbert")
+shelf.by("Herbert").each { puts _1.title }
 ```
 
 ## Tables
@@ -96,6 +102,6 @@ Markdown images render responsively with rounded corners:
 ##### Fifth level
 ###### Sixth level
 
-## Footnote-style Content
+## Table of Contents
 
 The table of contents in the sidebar is auto-generated from all the headings on this page. Open it by tapping the list icon in the top bar.

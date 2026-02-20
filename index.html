@@ -138,6 +138,13 @@ document.head.appendChild(link);
     -webkit-backdrop-filter: blur(12px);
   }
 
+  #logo {
+    height: 18px;
+    width: auto;
+    flex-shrink: 0;
+    flex: 1;
+  }
+
   #app-title {
     font-family: var(--font-display);
     font-size: 1.1rem;
@@ -503,7 +510,6 @@ document.head.appendChild(link);
     font-size: var(--text-xs);
     line-height: 1.7;
     background: none;
-    color: var(--ink);
     padding: 0;
     border: none;
     letter-spacing: 0;
@@ -1111,7 +1117,15 @@ document.head.appendChild(link);
 
 <!-- Top bar -->
 <header id="topbar">
-  <span id="app-title">Reader</span>
+  <svg id="logo" viewBox="0 0 112 28" height="18" aria-label="Reader">
+    <text x="1" y="20" font-family="'Playfair Display', Georgia, serif" font-weight="900" font-size="26" letter-spacing="3" fill="currentColor"><tspan style="fill:var(--accent)">R</tspan>eader</text>
+    <g opacity="0.15" stroke="currentColor" fill="none">
+      <line x1="1" y1="25" x2="1" y2="27" stroke-width="0.6"/>
+      <line x1="1" y1="26" x2="105" y2="26" stroke-width="0.35"/>
+      <line x1="105" y1="25" x2="105" y2="27" stroke-width="0.6"/>
+    </g>
+  </svg>
+  <span id="app-title" style="display:none"></span>
 
   <button class="toolbar-btn" id="btn-open" title="Open file" onclick="openFile()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -1131,6 +1145,12 @@ document.head.appendChild(link);
     </svg>
   </button>
 
+  <button class="toolbar-btn" id="btn-clear" title="Clear annotations" onclick="clearAnnotations()" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/>
+    </svg>
+  </button>
+
   <button class="toolbar-btn" id="btn-settings" title="Settings" onclick="toggleSettings()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -1141,8 +1161,8 @@ document.head.appendChild(link);
 <!-- Drop zone -->
 <main id="dropzone">
   <div class="drop-icon">📖</div>
-  <h1 class="drop-title">Drop a Markdown file</h1>
-  <p class="drop-sub">Or paste a URL below — works offline, nothing leaves your device</p>
+  <h1 class="drop-title" id="dropzone-heading">Drop a Markdown file</h1>
+  <p class="drop-sub" id="dropzone-sub">Or paste a URL below — works offline, nothing leaves your device</p>
 
   <button class="drop-btn" onclick="openFile()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -1259,6 +1279,9 @@ let currentTheme = localStorage.getItem('reader-theme') || 'light';
 let currentFont = localStorage.getItem('reader-font') || 'lora';
 let measureWidth = parseInt(localStorage.getItem('reader-width') || '68');
 
+// ─── Document Source ───
+let currentDocSource = ''; // URL or filename
+
 // ─── Annotation State ───
 let annotations = [];
 let annotationCounter = 0;
@@ -1275,10 +1298,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('size-display').textContent = fontSize;
   document.getElementById('width-slider').value = measureWidth;
 
-  // Check URL param ?url=...
+  // Check URL param ?url=... or #filename hash
   const params = new URLSearchParams(location.search);
   if (params.has('url')) {
     fetchMarkdown(params.get('url'));
+  } else if (location.hash.length > 1) {
+    const filename = decodeURIComponent(location.hash.slice(1));
+    document.getElementById('dropzone-heading').textContent =
+      'You were reading ' + filename;
+    document.getElementById('dropzone-sub').textContent =
+      'Drop the file again to continue';
   }
 
   // Mermaid init
@@ -1302,7 +1331,11 @@ function openFile() {
 function handleFile(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => renderMarkdown(e.target.result, file.name);
+  reader.onload = e => {
+    currentDocSource = file.name;
+    history.replaceState(null, '', '#' + encodeURIComponent(file.name));
+    renderMarkdown(e.target.result, file.name);
+  };
   reader.onerror = () => showError('Could not read the file.');
   reader.readAsText(file);
 }
@@ -1325,6 +1358,8 @@ async function fetchMarkdown(url) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     const filename = url.split('/').pop() || 'document.md';
+    currentDocSource = url;
+    history.replaceState(null, '', '?url=' + encodeURIComponent(url));
     renderMarkdown(text, filename);
   } catch (e) {
     showLoading(false);
@@ -1362,12 +1397,6 @@ function renderMarkdown(text, filename = 'document') {
     breaks: false,
     headerIds: true,
     mangle: false,
-    highlight: (code, lang) => {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, { language: lang }).value;
-      }
-      return hljs.highlightAuto(code).value;
-    }
   });
 
   // Pre-process: detect mermaid fences
@@ -1411,6 +1440,9 @@ function renderMarkdown(text, filename = 'document') {
 
   content.innerHTML = metaHtml + html;
 
+  // Syntax highlighting
+  content.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+
   // Mermaid
   mermaid.initialize({
     startOnLoad: false,
@@ -1418,8 +1450,37 @@ function renderMarkdown(text, filename = 'document') {
   });
   mermaid.run({ nodes: content.querySelectorAll('.mermaid') });
 
+  // Make task list checkboxes interactive
+  content.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.disabled = false;
+    cb.addEventListener('change', () => {
+      const li = cb.closest('li');
+      const text = li ? li.textContent.trim() : '';
+      const id = 'ann-' + (++annotationCounter);
+      if (cb.checked) {
+        annotations.push({ id, type: 'checkbox', text, comment: null });
+        li.style.textDecoration = 'line-through';
+        li.style.opacity = '0.6';
+      } else {
+        // Uncheck: remove the checkbox annotation for this text
+        annotations = annotations.filter(a => !(a.type === 'checkbox' && a.text === text));
+        li.style.textDecoration = '';
+        li.style.opacity = '';
+      }
+      updateExportButton();
+      saveAnnotations();
+    });
+  });
+
   // Build ToC
   buildToc(content);
+
+  // Swap logo for document title
+  document.getElementById('logo').style.display = 'none';
+  document.getElementById('app-title').style.display = '';
+
+  // Restore saved annotations
+  loadAnnotations();
 
   showReader();
   window.scrollTo(0, 0);
@@ -1487,8 +1548,14 @@ function showDropzone() {
   document.getElementById('dropzone').style.display = 'flex';
   document.getElementById('reader').style.display = 'none';
   document.getElementById('btn-toc').style.display = 'none';
-  document.getElementById('app-title').textContent = 'Reader';
+  document.getElementById('logo').style.display = '';
+  document.getElementById('app-title').style.display = 'none';
+  document.getElementById('dropzone-heading').textContent = 'Drop a Markdown file';
+  document.getElementById('dropzone-sub').textContent =
+    'Or paste a URL below \u2014 works offline, nothing leaves your device';
   document.title = 'Reader';
+  currentDocSource = '';
+  history.replaceState(null, '', location.pathname);
   annotations = [];
   annotationCounter = 0;
   originalMarkdownText = '';
@@ -1780,6 +1847,7 @@ function addStrikethrough() {
   savedRange = null;
   hideAnnotationToolbar();
   updateExportButton();
+  saveAnnotations();
 }
 
 function startComment() {
@@ -1818,6 +1886,7 @@ function saveComment() {
   savedRange = null;
   document.getElementById('comment-popover').classList.remove('visible');
   updateExportButton();
+  saveAnnotations();
 }
 
 function cancelComment() {
@@ -1878,28 +1947,33 @@ function removeAnnotation() {
 
   hideDetail();
   updateExportButton();
+  saveAnnotations();
 }
 
 function updateExportButton() {
-  document.getElementById('btn-export').style.display = annotations.length ? '' : 'none';
+  const show = annotations.length > 0;
+  document.getElementById('btn-export').style.display = show ? '' : 'none';
+  document.getElementById('btn-clear').style.display = show ? '' : 'none';
 }
 
 function exportAnnotations() {
   if (!annotations.length) return;
 
-  let output = '<document>\n';
-  output += originalMarkdownText;
-  output += '\n</document>\n\n';
+  let output = '<source>\n';
+  output += currentDocSource || 'unknown document';
+  output += '\n</source>\n\n';
   output += '<annotations>\n';
   annotations.forEach((ann, i) => {
     if (ann.type === 'strikethrough') {
       output += `${i + 1}. [DELETE] "${ann.text}"\n`;
+    } else if (ann.type === 'checkbox') {
+      output += `${i + 1}. [CHECK] "${ann.text}"\n`;
     } else {
       output += `${i + 1}. [COMMENT on "${ann.text}"] ${ann.comment}\n`;
     }
   });
   output += '</annotations>\n\n';
-  output += 'Please apply these annotations: remove text marked DELETE, and address the feedback in each COMMENT.\n';
+  output += 'Please apply these annotations to the source document: remove text marked DELETE, check items marked CHECK, and address the feedback in each COMMENT.\n';
 
   navigator.clipboard.writeText(output).then(() => {
     showToast('Annotations copied to clipboard');
@@ -1920,6 +1994,139 @@ function showToast(msg) {
   toast.classList.add('visible');
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => toast.classList.remove('visible'), 2500);
+}
+
+// ─── Annotation Persistence ───
+function hashDoc(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h) + str.charCodeAt(i);
+    h |= 0;
+  }
+  return 'reader-ann-' + h;
+}
+
+function getAnnotationOffset(annId) {
+  const content = document.getElementById('content');
+  const firstSpan = content.querySelector(`[data-ann-id="${annId}"]`);
+  if (!firstSpan) return -1;
+  const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let offset = 0;
+  let node;
+  while (node = walker.nextNode()) {
+    if (firstSpan.contains(node)) return offset;
+    offset += node.length;
+  }
+  return -1;
+}
+
+function saveAnnotations() {
+  if (!originalMarkdownText) return;
+  const key = hashDoc(originalMarkdownText);
+  if (!annotations.length) {
+    localStorage.removeItem(key);
+    return;
+  }
+  const data = annotations.map(ann => ({
+    type: ann.type,
+    text: ann.text,
+    comment: ann.comment,
+    offset: ann.type === 'checkbox' ? -1 : getAnnotationOffset(ann.id)
+  }));
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+function loadAnnotations() {
+  const key = hashDoc(originalMarkdownText);
+  const stored = localStorage.getItem(key);
+  if (!stored) return;
+
+  let data;
+  try { data = JSON.parse(stored); } catch(_) { return; }
+
+  const content = document.getElementById('content');
+  const fullText = content.textContent;
+
+  data.forEach(ann => {
+    const id = 'ann-' + (++annotationCounter);
+
+    if (ann.type === 'checkbox') {
+      // Restore checkbox state by matching text
+      content.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        const li = cb.closest('li');
+        if (li && li.textContent.trim() === ann.text && !cb.checked) {
+          cb.checked = true;
+          li.style.textDecoration = 'line-through';
+          li.style.opacity = '0.6';
+        }
+      });
+      annotations.push({ id, type: 'checkbox', text: ann.text, comment: null });
+      return;
+    }
+
+    if (ann.offset < 0) return;
+    const textAtOffset = fullText.substring(ann.offset, ann.offset + ann.text.length);
+    if (textAtOffset !== ann.text) return;
+
+    const range = createRangeFromOffset(ann.offset, ann.text.length);
+    if (!range) return;
+
+    const className = ann.type === 'strikethrough' ? 'ann-strikethrough' : 'ann-comment';
+    wrapRange(range, className, id);
+    annotations.push({ id, type: ann.type, text: ann.text, comment: ann.comment });
+  });
+
+  updateExportButton();
+}
+
+function createRangeFromOffset(startOffset, length) {
+  const content = document.getElementById('content');
+  const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let offset = 0;
+  let node;
+  const range = document.createRange();
+  let startSet = false;
+
+  while (node = walker.nextNode()) {
+    const nodeEnd = offset + node.length;
+    if (!startSet && nodeEnd > startOffset) {
+      range.setStart(node, startOffset - offset);
+      startSet = true;
+    }
+    if (startSet && nodeEnd >= startOffset + length) {
+      range.setEnd(node, startOffset + length - offset);
+      return range;
+    }
+    offset = nodeEnd;
+  }
+
+  return startSet ? range : null;
+}
+
+function clearAnnotations() {
+  document.querySelectorAll('[data-ann-id]').forEach(span => {
+    const parent = span.parentNode;
+    while (span.firstChild) parent.insertBefore(span.firstChild, span);
+    parent.removeChild(span);
+  });
+  // Reset checked checkboxes
+  document.querySelectorAll('#content input[type="checkbox"]:checked').forEach(cb => {
+    cb.checked = false;
+    const li = cb.closest('li');
+    if (li) { li.style.textDecoration = ''; li.style.opacity = ''; }
+  });
+  document.getElementById('content').normalize();
+
+  annotations = [];
+  annotationCounter = 0;
+
+  if (originalMarkdownText) {
+    localStorage.removeItem(hashDoc(originalMarkdownText));
+  }
+
+  updateExportButton();
+  hideDetail();
+  showToast('Annotations cleared');
 }
 
 // ─── Range Wrapping ───
@@ -1965,10 +2172,10 @@ function getTextNodesInRange(range) {
   let node;
 
   while (node = walker.nextNode()) {
-    const nr = document.createRange();
-    nr.selectNodeContents(node);
-    if (nr.compareBoundaryPoints(Range.END_TO_START, range) < 0) continue;
-    if (nr.compareBoundaryPoints(Range.START_TO_END, range) > 0) break;
+    if (!range.intersectsNode(node)) {
+      if (result.length) break;
+      continue;
+    }
 
     let start = 0;
     let end = node.length;
