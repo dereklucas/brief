@@ -4,17 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A single-file PWA markdown reader for focused mobile reading. The entire app lives in `reader.html` — no build step, no bundler, no dependencies to install. Open it directly in a browser or deploy as a GitHub Page by renaming to `index.html`.
+A single-file PWA markdown reader for focused mobile reading. The entire app lives in `index.html` — no build step, no bundler, no dependencies to install. Open it directly in a browser. Deployed to GitHub Pages at dereklucas.github.io/reader.
 
 ## Development
 
-There is no build, lint, or test process. To work on the app, edit `reader.html` and open it in a browser. All CSS, HTML, and JavaScript are in that one file.
+There is no build, lint, or test process. To work on the app, edit `index.html` and open it in a browser. All CSS, HTML, and JavaScript are in that one file.
 
-To deploy: rename `reader.html` to `index.html` and push to a GitHub Pages-enabled repo.
+To deploy: push to main. GitHub Pages serves `index.html` automatically.
 
 ## Architecture
 
-`reader.html` is structured in this order:
+`index.html` is structured in this order:
 
 1. **`<head>`** — Meta tags, Google Fonts link, CDN script/link tags (marked, highlight.js, mermaid), inline PWA manifest (generated as a Blob URL)
 2. **`<style>`** — All CSS using custom properties (design tokens) on `:root` and `[data-theme="dark"]`. Sepia theme is applied at runtime via `style.setProperty` overrides rather than a CSS selector.
