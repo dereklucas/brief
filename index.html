@@ -359,8 +359,8 @@ document.head.appendChild(link);
   #content h3 + p,
   #content h4 + p { }
 
-  /* Drop cap for first paragraph after h1 */
-  #content h1 + p::first-letter {
+  /* Drop cap for first paragraph after h1 — only when frontmatter meta is present */
+  #content:has(.doc-meta) h1 + p::first-letter {
     float: left;
     font-family: var(--font-display);
     font-size: 3.8em;
@@ -1342,7 +1342,10 @@ async function handleGitHubCommit(owner, repo, sha) {
         );
         if (r.ok) {
           const d = await r.json();
-          if (d.content) text = atob(d.content.replace(/\n/g, ''));
+          if (d.content) {
+            const binary = atob(d.content.replace(/\n/g, ''));
+            text = new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0)));
+          }
         }
       } else {
         // raw URL works for public repos
