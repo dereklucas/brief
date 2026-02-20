@@ -1209,12 +1209,21 @@ document.head.appendChild(link);
     </div>
   </div>
 
-  <div class="settings-row" style="margin-bottom:0;">
+  <div class="settings-row">
     <span class="settings-label">Theme</span>
     <div class="theme-toggle-row" style="flex:1; margin-left:16px; gap:6px;">
       <button class="theme-btn active" id="btn-light" onclick="setTheme('light')">☀ Light</button>
       <button class="theme-btn" id="btn-sepia" onclick="setTheme('sepia')">◑ Sepia</button>
       <button class="theme-btn" id="btn-dark" onclick="setTheme('dark')">☾ Dark</button>
+    </div>
+  </div>
+
+  <div class="settings-row" style="margin-bottom:0;">
+    <span class="settings-label">GitHub token</span>
+    <div style="flex:1; margin-left:16px;">
+      <input type="password" id="github-token-input" placeholder="ghp_… (for private repos)"
+        oninput="saveGitHubToken(this.value)"
+        style="width:100%; padding:7px 12px; background:var(--paper-dark); border:1px solid var(--border); border-radius:8px; font-family:var(--font-mono); font-size:var(--text-xs); color:var(--ink); outline:none;">
     </div>
   </div>
 </div>
@@ -1284,6 +1293,100 @@ let activeAnnotationId = null;
 let folderFiles = {}; // path → markdown text
 let currentFolderFile = '';
 
+// ─── GitHub ───
+let githubToken = localStorage.getItem('reader-github-token') || '';
+
+function saveGitHubToken(val) {
+  githubToken = val.trim();
+  if (githubToken) localStorage.setItem('reader-github-token', githubToken);
+  else localStorage.removeItem('reader-github-token');
+}
+
+function ghHeaders() {
+  const h = { Accept: 'application/vnd.github.v3+json' };
+  if (githubToken) h['Authorization'] = 'Bearer ' + githubToken;
+  return h;
+}
+
+function detectGitHubCommit(url) {
+  const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/commit\/([0-9a-f]+)/i);
+  return m ? { owner: m[1], repo: m[2], sha: m[3] } : null;
+}
+
+async function handleGitHubCommit(owner, repo, sha) {
+  showLoading();
+  try {
+    const commitRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`,
+      { headers: ghHeaders() }
+    );
+    if (!commitRes.ok) {
+      const hint = commitRes.status === 404 || commitRes.status === 401
+        ? ' (private repo? add a GitHub token in Settings)'
+        : '';
+      throw new Error(`GitHub API ${commitRes.status}${hint}`);
+    }
+    const commit = await commitRes.json();
+
+    const changed = (commit.files || []).filter(f => f.status !== 'removed');
+    if (!changed.length) throw new Error('No changed files in this commit.');
+
+    folderFiles = {};
+    for (const file of changed) {
+      let text;
+      if (githubToken) {
+        // Contents API works for private repos
+        const r = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${file.filename}?ref=${sha}`,
+          { headers: ghHeaders() }
+        );
+        if (r.ok) {
+          const d = await r.json();
+          if (d.content) text = atob(d.content.replace(/\n/g, ''));
+        }
+      } else {
+        // raw URL works for public repos
+        const r = await fetch(file.raw_url);
+        if (r.ok) text = await r.text();
+      }
+      if (text != null) folderFiles[file.filename] = text;
+    }
+
+    if (!Object.keys(folderFiles).length) throw new Error('Could not fetch any file contents.');
+
+    // Build an index page
+    const shortSha = sha.slice(0, 7);
+    const message = commit.commit?.message || '';
+    const firstLine = message.split('\n')[0];
+    const date = commit.commit?.author?.date
+      ? new Date(commit.commit.author.date).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
+      : '';
+    const authorName = commit.commit?.author?.name || '';
+
+    let index = `# ${firstLine || ('Commit ' + shortSha)}\n\n`;
+    const meta = [date, authorName, `[${owner}/${repo}@${shortSha}](${commit.html_url})`].filter(Boolean);
+    if (meta.length) index += meta.join(' · ') + '\n\n---\n\n';
+    index += `## Changed Files\n\n`;
+    Object.keys(folderFiles).sort().forEach(path => {
+      index += `- [${path}](${path})\n`;
+    });
+
+    folderFiles['_index.md'] = index;
+
+    const url = `https://github.com/${owner}/${repo}/commit/${sha}`;
+    currentDocSource = url;
+    history.replaceState(
+      { folderFile: '_index.md', inFolder: true },
+      '',
+      '?url=' + encodeURIComponent(url)
+    );
+    loadFolderFile('_index.md', false);
+  } catch (e) {
+    showLoading(false);
+    showError(e.message);
+  }
+}
+
 // ─── Init ───
 document.addEventListener('DOMContentLoaded', () => {
   applyFont(currentFont, false);
@@ -1292,6 +1395,7 @@ document.addEventListener('DOMContentLoaded', () => {
   applyWidth(measureWidth, false);
   document.getElementById('size-display').textContent = fontSize;
   document.getElementById('width-slider').value = measureWidth;
+  document.getElementById('github-token-input').value = githubToken;
 
   // Check URL param ?url=... or #filename hash
   const params = new URLSearchParams(location.search);
@@ -1442,6 +1546,12 @@ function loadFromUrl() {
 }
 
 async function fetchMarkdown(url) {
+  const commit = detectGitHubCommit(url);
+  if (commit) {
+    await handleGitHubCommit(commit.owner, commit.repo, commit.sha);
+    return;
+  }
+
   showLoading();
   try {
     // Handle GitHub blob URLs → raw
