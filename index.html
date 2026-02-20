@@ -1379,15 +1379,26 @@ async function handleFolder(dirEntry) {
     || paths[0];
 
   currentDocSource = dirEntry.name + '/' + start;
-  history.replaceState(null, '', '#' + encodeURIComponent(dirEntry.name));
-  loadFolderFile(start);
+  history.replaceState(
+    { folderFile: start, inFolder: true },
+    '',
+    '#' + encodeURIComponent(start.split('/').pop())
+  );
+  loadFolderFile(start, false);
 }
 
-function loadFolderFile(path) {
+function loadFolderFile(path, push = true) {
   const text = folderFiles[path];
   if (!text) return;
   currentFolderFile = path;
   currentDocSource = path;
+  if (push) {
+    history.pushState(
+      { folderFile: path, inFolder: true },
+      '',
+      '#' + encodeURIComponent(path.split('/').pop())
+    );
+  }
   renderMarkdown(text, path.split('/').pop());
   setupFolderLinks();
 }
@@ -2316,6 +2327,14 @@ function getTextNodesInRange(range) {
 
   return result;
 }
+
+// ─── Folder Back/Forward Navigation ───
+window.addEventListener('popstate', e => {
+  if (e.state?.folderFile && folderFiles[e.state.folderFile]) {
+    loadFolderFile(e.state.folderFile, false);
+    window.scrollTo(0, 0);
+  }
+});
 
 // ─── Keyboard Shortcuts ───
 document.addEventListener('keydown', e => {
