@@ -2,7 +2,7 @@
 
 A focused markdown reader for your phone. Drop in a `.md` file or paste a URL and read it like a book — clean typography, no distractions.
 
-**[Open Reader →](https://v-good.github.io/reader)**
+**[Open Reader →](https://dereklucas.github.io/reader)**
 
 ## What it does
 
@@ -23,7 +23,7 @@ Open the link above on your phone or desktop. Then either:
 2. **Paste a URL** — paste a raw markdown URL (GitHub links are auto-converted) and hit Go
 3. **Link directly** — append `?url=` to load a document on open, e.g.:
    ```
-   https://v-good.github.io/reader?url=https://raw.githubusercontent.com/user/repo/main/README.md
+   https://dereklucas.github.io/reader?url=https://raw.githubusercontent.com/user/repo/main/README.md
    ```
 
 Your reading preferences (theme, font size, line width) are saved locally and persist between sessions.
