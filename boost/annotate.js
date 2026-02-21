@@ -1,10 +1,17 @@
-// Reader Annotate — Arc Boost
+// Reader Annotate — Bookmarklet / Arc Boost
 // Adds strike, comment, and export to any page.
-// In Arc: New Boost → paste into the JavaScript field.
-// Works on any URL pattern, including * for all pages.
+//
+// As a bookmarklet (works on any site, any browser):
+//   Save this URL as a bookmark, click it on any page:
+//   javascript:void(function(){var s=document.createElement('script');s.src='https://dereklucas.github.io/reader/boost/annotate.js?_='+Date.now();document.head.appendChild(s);}());
+//
+// As an Arc Boost:
+//   New Boost → paste this file into the JavaScript field.
+//   Note: Arc Boosts are limited to one domain at a time.
 
 (function () {
   if (document.getElementById('rdr-style')) return; // prevent double-injection
+  if (!document.body) { document.addEventListener('DOMContentLoaded', arguments.callee); return; }
 
   // ─── Styles ───
   const style = document.createElement('style');

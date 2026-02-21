@@ -69,13 +69,17 @@ gh auth token
 
 The token is stored in your browser's localStorage — nothing is sent anywhere except directly to the GitHub API.
 
-## Arc Boost
+## Bookmarklet
 
-`boost/annotate.js` brings the same strike/comment/export workflow to any webpage.
+`boost/annotate.js` brings the same strike/comment/export workflow to any webpage. The easiest way to use it is as a bookmarklet — save this as a bookmark and click it on any page:
 
-In Arc: **New Boost → JavaScript** → paste the file contents. Set the URL pattern to a specific domain or `*` for everywhere.
+```
+javascript:void(function(){var s=document.createElement('script');s.src='https://dereklucas.github.io/reader/boost/annotate.js?_='+Date.now();document.head.appendChild(s);}());
+```
 
-Select any text on any page to get the Strike and Comment toolbar. Export copies the same structured format as Reader, ready to paste into an LLM.
+Select any text to get the Strike and Comment toolbar. Export copies the same structured format as Reader, ready to paste into an LLM.
+
+Works in Arc, Chrome, Safari, and Firefox. Also works as an Arc Boost scoped to a specific domain.
 
 ## Examples
 
