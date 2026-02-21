@@ -19,14 +19,55 @@ A focused markdown reader for your phone. Drop in a `.md` file or paste a URL an
 
 Open the link above on your phone or desktop. Then either:
 
-1. **Drop a file** — drag and drop any `.md` or `.txt` file onto the page, or tap "Choose File"
-2. **Paste a URL** — paste a raw markdown URL (GitHub links are auto-converted) and hit Go
-3. **Link directly** — append `?url=` to load a document on open, e.g.:
+1. **Drop a file or folder** — drag and drop any `.md` or `.txt` file (or a folder of them) onto the page, or tap "Choose File". Links between files in a folder work automatically.
+2. **Paste a URL** — paste a raw markdown URL (GitHub blob links are auto-converted) and hit Go
+3. **Paste a GitHub commit URL** — loads all changed files as a browseable set with an index page
+4. **Link directly** — append `?url=` to load a document on open, e.g.:
    ```
    https://dereklucas.github.io/reader?url=https://raw.githubusercontent.com/dereklucas/reader/main/README.md
    ```
 
 Your reading preferences (theme, font size, line width) are saved locally and persist between sessions.
+
+## Annotations
+
+Select any text to mark it up:
+
+- **Strike** — marks text for deletion
+- **Comment** — highlights text and attaches a note
+- **Note** — the note icon in the toolbar adds a comment on the whole document
+
+Annotations persist across page reloads (stored locally, keyed to the document content). The export button copies a structured summary to your clipboard:
+
+```
+<source>
+https://raw.githubusercontent.com/…/doc.md
+</source>
+
+<annotations>
+1. [DELETE] "the old approach"
+2. [COMMENT on "we should revisit this"] worth a follow-up with the team
+3. [NOTE] Overall this section needs a rewrite
+</annotations>
+```
+
+Paste that directly into Claude or another LLM to apply the edits.
+
+## GitHub
+
+Paste any GitHub commit URL and Reader fetches all changed files, generates a linked index, and lets you browse them with browser back/forward:
+
+```
+https://github.com/owner/repo/commit/abc1234
+```
+
+**Private repos** require a GitHub personal access token. Add it in Settings (the gear icon). Get yours with:
+
+```sh
+gh auth token
+```
+
+The token is stored in your browser's localStorage — nothing is sent anywhere except directly to the GitHub API.
 
 ## Examples
 
