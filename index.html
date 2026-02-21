@@ -1221,7 +1221,7 @@ document.head.appendChild(link);
   <div class="settings-row" style="margin-bottom:0;">
     <span class="settings-label">GitHub token</span>
     <div style="flex:1; margin-left:16px;">
-      <input type="password" id="github-token-input" placeholder="ghp_… (for private repos)"
+      <input type="text" id="github-token-input" placeholder="ghp_… (for private repos)" autocomplete="off" spellcheck="false"
         oninput="saveGitHubToken(this.value)"
         style="width:100%; padding:7px 12px; background:var(--paper-dark); border:1px solid var(--border); border-radius:8px; font-family:var(--font-mono); font-size:var(--text-xs); color:var(--ink); outline:none;">
     </div>
