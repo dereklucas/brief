@@ -1266,7 +1266,10 @@ document.head.appendChild(link);
 <div id="ann-detail">
   <div class="ann-detail-text" id="ann-detail-text"></div>
   <div class="ann-detail-comment" id="ann-detail-comment"></div>
-  <button class="ann-delete-btn" onclick="removeAnnotation()">Remove</button>
+  <div style="display:flex; gap:8px;">
+    <button class="ann-delete-btn" id="ann-edit-btn" onclick="editAnnotation()">Edit</button>
+    <button class="ann-delete-btn" onclick="removeAnnotation()">Remove</button>
+  </div>
 </div>
 
 <!-- Toast -->
@@ -1311,6 +1314,73 @@ function ghHeaders() {
 function detectGitHubCommit(url) {
   const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/commit\/([0-9a-f]+)/i);
   return m ? { owner: m[1], repo: m[2], sha: m[3] } : null;
+}
+
+function detectGitHubPR(url) {
+  const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/i);
+  return m ? { owner: m[1], repo: m[2], number: m[3] } : null;
+}
+
+async function handleGitHubPR(owner, repo, number) {
+  showLoading();
+  try {
+    const headers = ghHeaders();
+    const [prRes, filesRes] = await Promise.all([
+      fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${number}`, { headers }),
+      fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${number}/files`, { headers }),
+    ]);
+    if (!prRes.ok) {
+      const hint = prRes.status === 404 || prRes.status === 401
+        ? ' (private repo? add a GitHub token in Settings)' : '';
+      throw new Error(`GitHub API ${prRes.status}${hint}`);
+    }
+    const pr = await prRes.json();
+    const files = filesRes.ok ? await filesRes.json() : [];
+    const changed = files.filter(f => f.status !== 'removed');
+    if (!changed.length) throw new Error('No changed files in this PR.');
+
+    folderFiles = {};
+    for (const file of changed) {
+      let text;
+      if (githubToken) {
+        const r = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${file.filename}?ref=${pr.head.sha}`,
+          { headers }
+        );
+        if (r.ok) {
+          const d = await r.json();
+          if (d.content) {
+            const binary = atob(d.content.replace(/\n/g, ''));
+            text = new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0)));
+          }
+        }
+      } else {
+        const r = await fetch(file.raw_url);
+        if (r.ok) text = await r.text();
+      }
+      if (text != null) folderFiles[file.filename] = text;
+    }
+    if (!Object.keys(folderFiles).length) throw new Error('Could not fetch any file contents.');
+
+    const date = pr.created_at
+      ? new Date(pr.created_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
+      : '';
+    let index = `# ${pr.title}\n\n`;
+    const meta = [date, pr.user?.login, `[${owner}/${repo}#${number}](${pr.html_url})`].filter(Boolean);
+    if (meta.length) index += meta.join(' · ') + '\n\n';
+    if (pr.body?.trim()) index += pr.body.trim() + '\n\n';
+    index += `---\n\n## Changed Files\n\n`;
+    Object.keys(folderFiles).sort().forEach(path => { index += `- [${path}](${path})\n`; });
+    folderFiles['_index.md'] = index;
+
+    const url = `https://github.com/${owner}/${repo}/pull/${number}`;
+    currentDocSource = url;
+    history.replaceState({ folderFile: '_index.md', inFolder: true }, '', '?url=' + encodeURIComponent(url));
+    loadFolderFile('_index.md', false);
+  } catch (e) {
+    showLoading(false);
+    showError(e.message);
+  }
 }
 
 async function handleGitHubCommit(owner, repo, sha) {
@@ -1550,10 +1620,10 @@ function loadFromUrl() {
 
 async function fetchMarkdown(url) {
   const commit = detectGitHubCommit(url);
-  if (commit) {
-    await handleGitHubCommit(commit.owner, commit.repo, commit.sha);
-    return;
-  }
+  if (commit) { await handleGitHubCommit(commit.owner, commit.repo, commit.sha); return; }
+
+  const pr = detectGitHubPR(url);
+  if (pr) { await handleGitHubPR(pr.owner, pr.repo, pr.number); return; }
 
   showLoading();
   try {
@@ -2105,6 +2175,17 @@ function saveComment() {
   const comment = textarea.value.trim();
   if (!comment) return;
 
+  if (_editAnnotationId) {
+    const ann = annotations.find(a => a.id === _editAnnotationId);
+    if (ann) ann.comment = comment;
+    document.getElementById('comment-popover').classList.remove('visible');
+    textarea.placeholder = 'Add your note…';
+    _editAnnotationId = null;
+    saveAnnotations();
+    showToast('Note updated');
+    return;
+  }
+
   if (_docNoteMode) {
     const id = 'ann-' + (++annotationCounter);
     annotations.push({ id, type: 'note', text: '', comment });
@@ -2133,11 +2214,29 @@ function saveComment() {
 
 function cancelComment() {
   document.getElementById('comment-popover').classList.remove('visible');
+  document.getElementById('comment-text').placeholder = 'Add your note…';
   savedRange = null;
   _docNoteMode = false;
+  _editAnnotationId = null;
+}
+
+function editAnnotation() {
+  const ann = annotations.find(a => a.id === activeAnnotationId);
+  if (!ann) return;
+  _editAnnotationId = activeAnnotationId;
+  hideDetail();
+  const popover = document.getElementById('comment-popover');
+  const textarea = document.getElementById('comment-text');
+  popover.style.top = '60px';
+  popover.style.left = Math.max(8, (window.innerWidth - 320) / 2) + 'px';
+  popover.classList.add('visible');
+  textarea.value = ann.comment || '';
+  textarea.placeholder = 'Edit your note…';
+  textarea.focus();
 }
 
 let _docNoteMode = false;
+let _editAnnotationId = null;
 
 function startDocNote() {
   _docNoteMode = true;
@@ -2161,8 +2260,12 @@ function showAnnotationDetail(id, element) {
   const detailText = document.getElementById('ann-detail-text');
   const detailComment = document.getElementById('ann-detail-comment');
 
-  const display = ann.text.length > 120 ? ann.text.slice(0, 120) + '…' : ann.text;
-  detailText.textContent = '"' + display + '"';
+  if (ann.type === 'note') {
+    detailText.textContent = 'Document note';
+  } else {
+    const display = ann.text.length > 120 ? ann.text.slice(0, 120) + '…' : ann.text;
+    detailText.textContent = '"' + display + '"';
+  }
 
   if (ann.comment) {
     detailComment.textContent = ann.comment;
@@ -2170,6 +2273,10 @@ function showAnnotationDetail(id, element) {
   } else {
     detailComment.style.display = 'none';
   }
+
+  // Edit button only for comment/note types
+  document.getElementById('ann-edit-btn').style.display =
+    (ann.type === 'comment' || ann.type === 'note') ? '' : 'none';
 
   const rect = element.getBoundingClientRect();
   detail.style.visibility = 'hidden';
