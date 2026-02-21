@@ -71,7 +71,7 @@ The token is stored in your browser's localStorage — nothing is sent anywhere 
 
 ## Bookmarklet
 
-`boost/annotate.js` brings the same strike/comment/export workflow to any webpage. The easiest way to use it is as a bookmarklet — save this as a bookmark and click it on any page:
+`annotate.js` brings the same strike/comment/export workflow to any webpage. The easiest way to use it is as a bookmarklet — save this as a bookmark and click it on any page:
 
 ```
 javascript:void(function(){var s=document.createElement('script');s.src='https://dereklucas.github.io/reader/boost/annotate.js?_='+Date.now();document.head.appendChild(s);}());
@@ -79,7 +79,7 @@ javascript:void(function(){var s=document.createElement('script');s.src='https:/
 
 Select any text to get the Strike and Comment toolbar. Export copies the same structured format as Reader, ready to paste into an LLM.
 
-Works in Arc, Chrome, Safari, and Firefox. Also works as an Arc Boost scoped to a specific domain.
+Works in Arc, Chrome, Safari, and Firefox. Also works as an Arc Boost scoped to a specific domain (New Boost → paste `annotate.js` into the JavaScript field).
 
 ## Examples
 

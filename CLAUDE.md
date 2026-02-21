@@ -38,6 +38,10 @@ To deploy: push to main. GitHub Pages serves `index.html` automatically.
 | mermaid      | 10.6.1  | Diagram rendering        |
 | Google Fonts | —       | Lora, Playfair Display, JetBrains Mono |
 
+## annotate.js
+
+A standalone bookmarklet/Arc Boost that brings the strike/comment/export workflow to any webpage. The bookmarklet URL (in both `annotate.js` and `README.md`) points to the GitHub Pages URL of this file. **If the file is renamed or moved, update the URL in both places.**
+
 ## Key Conventions
 
 - **Everything in one file** — do not split into separate CSS/JS files. The single-file design is intentional for portability.
