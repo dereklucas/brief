@@ -53,6 +53,7 @@
       text-decoration-color: rgba(220,50,30,0.7);
       text-decoration-thickness: 2px;
       background: rgba(220,50,30,0.06);
+      cursor: pointer;
     }
     .rdr-comment {
       background: rgba(255,180,0,0.2);
@@ -60,35 +61,38 @@
       cursor: pointer;
     }
 
-    #rdr-popover {
+    #rdr-popover, #rdr-detail {
       position: fixed;
       z-index: 2147483646;
-      background: #fff;
-      border: 1px solid rgba(0,0,0,0.12);
+      background: #1e1b17;
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 12px;
       padding: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.14);
-      width: min(320px, calc(100vw - 32px));
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
       display: none;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    #rdr-popover.rdr-on { display: block; }
+    #rdr-popover { width: min(320px, calc(100vw - 32px)); }
+    #rdr-detail  { width: min(280px, calc(100vw - 32px)); }
+    #rdr-popover.rdr-on, #rdr-detail.rdr-on { display: block; }
+
     #rdr-textarea {
       width: 100%;
       min-height: 80px;
       padding: 10px 12px;
-      border: 1px solid rgba(0,0,0,0.12);
+      border: 1px solid rgba(255,255,255,0.12);
       border-radius: 8px;
-      background: #f8f7f5;
+      background: #2a2420;
       font-family: inherit;
       font-size: 14px;
       line-height: 1.5;
-      color: #1a1410;
+      color: #F5F0E8;
       resize: vertical;
       outline: none;
       box-sizing: border-box;
     }
-    #rdr-textarea:focus { border-color: #8B4513; }
+    #rdr-textarea::placeholder { color: rgba(245,240,232,0.35); }
+    #rdr-textarea:focus { border-color: #C4724A; }
     .rdr-actions {
       display: flex;
       justify-content: flex-end;
@@ -105,7 +109,68 @@
       border: none;
     }
     .rdr-save { background: #8B4513; color: #fff; }
-    .rdr-cancel { background: #efefef; color: #555; }
+    .rdr-cancel { background: rgba(255,255,255,0.08); color: rgba(245,240,232,0.7); }
+    .rdr-cancel:hover { background: rgba(255,255,255,0.15); color: #F5F0E8; }
+
+    .rdr-detail-quote {
+      font-size: 13px;
+      color: rgba(245,240,232,0.5);
+      font-style: italic;
+      border-left: 2px solid rgba(255,255,255,0.15);
+      padding-left: 8px;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .rdr-detail-note {
+      font-size: 14px;
+      color: #F5F0E8;
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    #rdr-controls {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 2147483647;
+      display: none;
+      gap: 8px;
+      align-items: center;
+    }
+    #rdr-controls.rdr-on { display: flex; }
+    #rdr-fab, #rdr-clear {
+      border: none;
+      border-radius: 100px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+    }
+    #rdr-fab {
+      background: #1a1410;
+      color: #F5F0E8;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #rdr-fab:hover { background: #2d2520; }
+    #rdr-clear {
+      background: rgba(30,27,23,0.85);
+      color: rgba(245,240,232,0.6);
+      padding: 8px 14px;
+    }
+    #rdr-clear:hover { background: #2d2520; color: #F5F0E8; }
+    .rdr-fab-count {
+      background: rgba(255,255,255,0.2);
+      border-radius: 100px;
+      padding: 1px 6px;
+      font-size: 11px;
+    }
 
     #rdr-toast {
       position: fixed;
@@ -142,12 +207,6 @@
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>Comment
     </button>
-    <button class="rdr-btn" id="rdr-export" style="display:none">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-        <polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
-      </svg>Export
-    </button>
   `);
 
   const popover = el('div', 'rdr-popover', `
@@ -158,14 +217,38 @@
     </div>
   `);
 
+  const detail = el('div', 'rdr-detail', `
+    <div class="rdr-detail-quote"></div>
+    <div class="rdr-detail-note"></div>
+    <div class="rdr-actions">
+      <button class="rdr-cancel" id="rdr-detail-remove">Remove</button>
+      <button class="rdr-save" id="rdr-detail-edit">Edit</button>
+    </div>
+  `);
+
+  const fab = el('button', 'rdr-fab', `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+      <polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+    </svg>Export <span class="rdr-fab-count"></span>
+  `);
+
+  const clear = el('button', 'rdr-clear', 'Clear');
+
+  const controls = document.createElement('div');
+  controls.id = 'rdr-controls';
+  controls.append(fab, clear);
+
   const toast = el('div', 'rdr-toast', '');
 
-  document.body.append(toolbar, popover, toast);
+  document.body.append(toolbar, popover, detail, controls, toast);
 
   // ─── State ───
   let savedRange = null;
   let annotations = [];
   let counter = 0;
+  let activeAnnId = null;
+  let _editId = null;
 
   // ─── Selection ───
   let selTimer;
@@ -197,7 +280,6 @@
     toolbar.style.top = top + 'px';
     toolbar.style.left = left + 'px';
     toolbar.style.visibility = '';
-    $('rdr-export').style.display = annotations.length ? '' : 'none';
   }
 
   function hideToolbar() { toolbar.classList.remove('rdr-on'); }
@@ -212,6 +294,7 @@
     window.getSelection().removeAllRanges();
     savedRange = null;
     hideToolbar();
+    updateControls();
   });
 
   // ─── Comment ───
@@ -242,7 +325,20 @@
 
   function saveComment() {
     const comment = $('rdr-textarea').value.trim();
-    if (!comment || !savedRange) return;
+    if (!comment) return;
+
+    if (_editId) {
+      const ann = annotations.find(a => a.id === _editId);
+      if (ann) {
+        ann.comment = comment;
+        document.querySelectorAll(`[data-rdr-id="${_editId}"]`).forEach(s => { s.title = comment; });
+      }
+      _editId = null;
+      closePopover();
+      return;
+    }
+
+    if (!savedRange) return;
     const text = savedRange.toString();
     const id = 'rdr-' + (++counter);
     wrapRange(savedRange, 'rdr-comment', id, comment);
@@ -250,15 +346,95 @@
     window.getSelection().removeAllRanges();
     savedRange = null;
     closePopover();
+    updateControls();
   }
 
   function closePopover() {
     popover.classList.remove('rdr-on');
     savedRange = null;
+    _editId = null;
   }
 
-  // ─── Export ───
-  on('rdr-export', 'click', () => {
+  // ─── Detail ───
+  on('rdr-detail-edit', 'click', () => { if (activeAnnId) editAnnotation(activeAnnId); });
+  on('rdr-detail-remove', 'click', () => { if (activeAnnId) removeAnnotation(activeAnnId); });
+
+  document.addEventListener('click', e => {
+    const span = e.target.closest('.rdr-strike, .rdr-comment');
+    if (span) { e.stopPropagation(); showDetail(span.dataset.rdrId, span); }
+  });
+
+  function showDetail(id, anchorEl) {
+    const ann = annotations.find(a => a.id === id);
+    if (!ann) return;
+    activeAnnId = id;
+    hideToolbar();
+
+    detail.querySelector('.rdr-detail-quote').textContent = '\u201C' + ann.text + '\u201D';
+    const noteEl = detail.querySelector('.rdr-detail-note');
+    if (ann.comment) { noteEl.textContent = ann.comment; noteEl.style.display = ''; }
+    else { noteEl.style.display = 'none'; }
+    $('rdr-detail-edit').style.display = ann.type === 'comment' ? '' : 'none';
+
+    detail.style.visibility = 'hidden';
+    detail.classList.add('rdr-on');
+    const rect = anchorEl.getBoundingClientRect();
+    const dRect = detail.getBoundingClientRect();
+    let top = rect.bottom + 8;
+    let left = rect.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - dRect.width - 8));
+    if (top + dRect.height > window.innerHeight - 8) top = rect.top - dRect.height - 8;
+    detail.style.top = top + 'px';
+    detail.style.left = left + 'px';
+    detail.style.visibility = '';
+  }
+
+  function hideDetail() {
+    detail.classList.remove('rdr-on');
+    activeAnnId = null;
+  }
+
+  function editAnnotation(id) {
+    const ann = annotations.find(a => a.id === id);
+    if (!ann || ann.type !== 'comment') return;
+    hideDetail();
+    _editId = id;
+    const firstSpan = document.querySelector(`[data-rdr-id="${id}"]`);
+    const rect = firstSpan ? firstSpan.getBoundingClientRect() : { bottom: 100, top: 60, left: 100 };
+    let top = rect.bottom + 8;
+    let left = rect.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - 336));
+    if (top + 160 > window.innerHeight) top = rect.top - 160;
+    popover.style.top = top + 'px';
+    popover.style.left = left + 'px';
+    const ta = $('rdr-textarea');
+    ta.value = ann.comment;
+    popover.classList.add('rdr-on');
+    ta.focus();
+  }
+
+  function removeAnnotation(id) {
+    annotations = annotations.filter(a => a.id !== id);
+    document.querySelectorAll(`[data-rdr-id="${id}"]`).forEach(span => {
+      const parent = span.parentNode;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    });
+    hideDetail();
+    updateControls();
+  }
+
+  // ─── Controls (FAB + Clear) ───
+  function updateControls() {
+    if (annotations.length) {
+      fab.querySelector('.rdr-fab-count').textContent = annotations.length;
+      controls.classList.add('rdr-on');
+    } else {
+      controls.classList.remove('rdr-on');
+    }
+  }
+
+  fab.addEventListener('click', () => {
     if (!annotations.length) return;
     let out = `<source>\n${document.title}\n${location.href}\n</source>\n\n<annotations>\n`;
     annotations.forEach((ann, i) => {
@@ -266,10 +442,18 @@
       else out += `${i + 1}. [COMMENT on "${ann.text}"] ${ann.comment}\n`;
     });
     out += `</annotations>\n\nPlease apply these annotations to the source document.`;
-    navigator.clipboard.writeText(out).then(() => {
-      hideToolbar();
-      showToast('Annotations copied');
+    navigator.clipboard.writeText(out).then(() => showToast('Annotations copied'));
+  });
+
+  clear.addEventListener('click', () => {
+    document.querySelectorAll('[data-rdr-id]').forEach(span => {
+      const parent = span.parentNode;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
     });
+    annotations = [];
+    hideDetail();
+    updateControls();
   });
 
   // ─── Range wrapping ───
@@ -319,13 +503,16 @@
 
   // ─── Close on outside click ───
   document.addEventListener('pointerdown', e => {
-    if (toolbar.contains(e.target) || popover.contains(e.target)) return;
+    const onAnnotation = e.target.closest('.rdr-strike, .rdr-comment');
+    if (toolbar.contains(e.target) || popover.contains(e.target) ||
+        detail.contains(e.target) || controls.contains(e.target) || onAnnotation) return;
+    hideDetail();
     hideToolbar();
     popover.classList.remove('rdr-on');
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { hideToolbar(); popover.classList.remove('rdr-on'); }
+    if (e.key === 'Escape') { hideToolbar(); popover.classList.remove('rdr-on'); hideDetail(); }
   });
 
   // ─── Helpers ───

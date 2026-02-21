@@ -38,9 +38,15 @@ To deploy: push to main. GitHub Pages serves `index.html` automatically.
 | mermaid      | 10.6.1  | Diagram rendering        |
 | Google Fonts | —       | Lora, Playfair Display, JetBrains Mono |
 
-## annotate.js
+## annotate.js and extension/content.js
 
-A standalone bookmarklet/Arc Boost that brings the strike/comment/export workflow to any webpage. The bookmarklet URL (in both `annotate.js` and `README.md`) points to the GitHub Pages URL of this file. **If the file is renamed or moved, update the URL in both places.**
+These two files implement the same annotation UI (strike, comment, export) for use outside of Reader:
+- `annotate.js` — bookmarklet loader target, for Safari/Firefox
+- `extension/content.js` — Chrome/Arc extension content script
+
+They share identical logic. **When changing one, update the other.** The only structural difference is that `annotate.js` wraps everything in an IIFE with a duplicate-injection guard; `extension/content.js` uses a top-level `if` guard instead.
+
+The bookmarklet URL appears in both `annotate.js` and `README.md`. **If the file is renamed or moved, update the URL in both places.**
 
 ## Key Conventions
 
