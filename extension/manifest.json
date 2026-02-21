@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Reader Annotate",
+  "version": "1.0",
+  "description": "Strike, comment, and export on any page.",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "permissions": ["clipboardWrite"]
+}
