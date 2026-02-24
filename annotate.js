@@ -1,9 +1,9 @@
-// Reader Annotate — Bookmarklet / Arc Boost
+// Brief Annotate — Bookmarklet / Arc Boost
 // Adds strike, comment, and export to any page.
 //
 // As a bookmarklet (works on any site, any browser):
 //   Save this URL as a bookmark, click it on any page:
-//   javascript:void(function(){var s=document.createElement('script');s.src='https://dereklucas.github.io/reader/annotate.js?_='+Date.now();document.head.appendChild(s);}());
+//   javascript:void(function(){var s=document.createElement('script');s.src='https://dereklucas.github.io/brief/annotate.js?_='+Date.now();document.head.appendChild(s);}());
 //
 // As an Arc Boost:
 //   New Boost → paste this file into the JavaScript field.
