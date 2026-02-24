@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#F5F0E8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Reader">
+<meta name="apple-mobile-web-app-title" content="Brief">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Reader</title>
+<title>Brief</title>
 
 <!-- Fonts: Lora for body (warm serif), JetBrains Mono for code -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,16 +23,16 @@
 <!-- PWA Manifest inline -->
 <script>
 const manifestData = {
-  name: "Markdown Reader",
-  short_name: "Reader",
-  description: "A beautiful focused markdown reader",
+  name: "Brief",
+  short_name: "Brief",
+  description: "Read and annotate markdown documents",
   start_url: "./",
   display: "standalone",
   background_color: "#F5F0E8",
   theme_color: "#F5F0E8",
   orientation: "portrait-primary",
   icons: [
-    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%23F5F0E8'/><text x='256' y='340' font-size='300' text-anchor='middle' font-family='Georgia,serif' fill='%231a1410'>M</text></svg>", sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%23F5F0E8'/><text x='256' y='340' font-size='300' text-anchor='middle' font-family='Georgia,serif' fill='%231a1410'>B</text></svg>", sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
   ]
 };
 const blob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
@@ -1104,7 +1104,14 @@ document.head.appendChild(link);
   #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
-<body data-theme="light">
+<body>
+<script>
+  (function() {
+    const saved = localStorage.getItem('brief-theme');
+    const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.body.setAttribute('data-theme', theme);
+  })();
+</script>
 
 <div id="progress-bar"></div>
 
@@ -1277,10 +1284,10 @@ document.head.appendChild(link);
 
 <script>
 // ─── State ───
-let fontSize = parseInt(localStorage.getItem('reader-fontsize') || '18');
-let currentTheme = localStorage.getItem('reader-theme') || 'light';
-let currentFont = localStorage.getItem('reader-font') || 'lora';
-let measureWidth = parseInt(localStorage.getItem('reader-width') || '68');
+let fontSize = parseInt(localStorage.getItem('brief-fontsize') || '18');
+let currentTheme = localStorage.getItem('brief-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+let currentFont = localStorage.getItem('brief-font') || 'lora';
+let measureWidth = parseInt(localStorage.getItem('brief-width') || '68');
 
 // ─── Document Source ───
 let currentDocSource = ''; // URL or filename
@@ -1297,12 +1304,12 @@ let folderFiles = {}; // path → markdown text
 let currentFolderFile = '';
 
 // ─── GitHub ───
-let githubToken = localStorage.getItem('reader-github-token') || '';
+let githubToken = localStorage.getItem('brief-github-token') || '';
 
 function saveGitHubToken(val) {
   githubToken = val.trim();
-  if (githubToken) localStorage.setItem('reader-github-token', githubToken);
-  else localStorage.removeItem('reader-github-token');
+  if (githubToken) localStorage.setItem('brief-github-token', githubToken);
+  else localStorage.removeItem('brief-github-token');
 }
 
 function ghHeaders() {
@@ -1470,16 +1477,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('width-slider').value = measureWidth;
   document.getElementById('github-token-input').value = githubToken;
 
-  // Check URL param ?url=... or #filename hash
+  // Check URL param ?url=..., otherwise restore last dropped file/folder
   const params = new URLSearchParams(location.search);
   if (params.has('url')) {
     fetchMarkdown(params.get('url'));
-  } else if (location.hash.length > 1) {
-    const filename = decodeURIComponent(location.hash.slice(1));
-    document.getElementById('dropzone-heading').textContent =
-      'You were reading ' + filename;
-    document.getElementById('dropzone-sub').textContent =
-      'Drop the file again to continue';
+  } else {
+    restoreLastDoc();
   }
 
   // Mermaid init
@@ -1507,9 +1510,80 @@ function handleFile(file) {
     currentDocSource = file.name;
     history.replaceState(null, '', '#' + encodeURIComponent(file.name));
     renderMarkdown(e.target.result, file.name);
+    saveLastDoc();
   };
   reader.onerror = () => showError('Could not read the file.');
   reader.readAsText(file);
+}
+
+async function deflate(str) {
+  const stream = new CompressionStream('gzip');
+  const writer = stream.writable.getWriter();
+  writer.write(new TextEncoder().encode(str));
+  writer.close();
+  const chunks = [];
+  const reader = stream.readable.getReader();
+  let result;
+  while (!(result = await reader.read()).done) chunks.push(result.value);
+  const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let offset = 0;
+  for (const c of chunks) { bytes.set(c, offset); offset += c.length; }
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+async function inflate(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const stream = new DecompressionStream('gzip');
+  const writer = stream.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const chunks = [];
+  const reader = stream.readable.getReader();
+  let result;
+  while (!(result = await reader.read()).done) chunks.push(result.value);
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let offset = 0;
+  for (const c of chunks) { out.set(c, offset); offset += c.length; }
+  return new TextDecoder().decode(out);
+}
+
+async function saveLastDoc() {
+  try {
+    const data = Object.keys(folderFiles).length
+      ? { type: 'folder', files: folderFiles, current: currentFolderFile }
+      : { type: 'file', content: originalMarkdownText, filename: currentDocSource };
+    const compressed = await deflate(JSON.stringify(data));
+    localStorage.setItem('brief-last', compressed);
+  } catch (e) { /* quota exceeded or compression unavailable — silently skip */ }
+}
+
+async function restoreLastDoc() {
+  const saved = localStorage.getItem('brief-last');
+  if (!saved) return;
+  try {
+    const data = JSON.parse(await inflate(saved));
+    if (data.type === 'file' && data.content) {
+      currentDocSource = data.filename;
+      history.replaceState(null, '', '#' + encodeURIComponent(data.filename));
+      renderMarkdown(data.content, data.filename);
+    } else if (data.type === 'folder' && data.files) {
+      folderFiles = data.files;
+      currentFolderFile = data.current;
+      currentDocSource = data.current;
+      history.replaceState(
+        { folderFile: data.current, inFolder: true },
+        '',
+        '#' + encodeURIComponent(data.current.split('/').pop())
+      );
+      loadFolderFile(data.current, false);
+    }
+  } catch (e) {
+    localStorage.removeItem('brief-last');
+  }
 }
 
 async function handleFolder(dirEntry) {
@@ -1578,6 +1652,7 @@ function loadFolderFile(path, push = true) {
   }
   renderMarkdown(text, path.split('/').pop());
   setupFolderLinks();
+  saveLastDoc();
 }
 
 function setupFolderLinks() {
@@ -1702,7 +1777,7 @@ function renderMarkdown(text, filename = 'document') {
   const titleFromH1 = body.match(/^#\s+(.+)/m)?.[1];
   const docTitle = titleFromMeta || titleFromH1 || filename.replace(/\.(md|markdown)$/, '');
   document.getElementById('app-title').textContent = docTitle;
-  document.title = docTitle + ' — Reader';
+  document.title = docTitle + ' — Brief';
 
   const content = document.getElementById('content');
 
@@ -1831,7 +1906,7 @@ function showDropzone() {
   document.getElementById('dropzone-heading').textContent = 'Drop a Markdown file or folder';
   document.getElementById('dropzone-sub').textContent =
     'Or paste a URL below \u2014 works offline, nothing leaves your device';
-  document.title = 'Reader';
+  document.title = 'Brief';
   currentDocSource = '';
   folderFiles = {};
   currentFolderFile = '';
@@ -1885,23 +1960,23 @@ function adjustSize(delta) {
   fontSize = Math.min(28, Math.max(13, fontSize + delta));
   applySize(fontSize);
   document.getElementById('size-display').textContent = fontSize;
-  localStorage.setItem('reader-fontsize', fontSize);
+  localStorage.setItem('brief-fontsize', fontSize);
 }
 
 function applySize(size, save = true) {
   document.documentElement.style.setProperty('--text-base', size + 'px');
-  if (save) localStorage.setItem('reader-fontsize', size);
+  if (save) localStorage.setItem('brief-fontsize', size);
 }
 
 // ─── Line Width ───
 function adjustWidth(val) {
   applyWidth(parseInt(val));
-  localStorage.setItem('reader-width', val);
+  localStorage.setItem('brief-width', val);
 }
 
 function applyWidth(val, save = true) {
   document.documentElement.style.setProperty('--measure', val + 'ch');
-  if (save) localStorage.setItem('reader-width', val);
+  if (save) localStorage.setItem('brief-width', val);
 }
 
 // ─── Font ───
@@ -1909,7 +1984,7 @@ function setFont(font, btn) {
   document.querySelectorAll('.font-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   applyFont(font);
-  localStorage.setItem('reader-font', font);
+  localStorage.setItem('brief-font', font);
 }
 
 function applyFont(font, save = true) {
@@ -1919,7 +1994,7 @@ function applyFont(font, save = true) {
     system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
   };
   document.documentElement.style.setProperty('--font-body', fonts[font] || fonts.lora);
-  if (save) localStorage.setItem('reader-font', font);
+  if (save) localStorage.setItem('brief-font', font);
 
   // Update active button
   document.querySelectorAll('.font-btn').forEach(b => {
@@ -1930,7 +2005,7 @@ function applyFont(font, save = true) {
 // ─── Theme ───
 function setTheme(theme) {
   applyTheme(theme);
-  localStorage.setItem('reader-theme', theme);
+  localStorage.setItem('brief-theme', theme);
 
   // Reinit mermaid with correct theme
   mermaid.initialize({ theme: theme === 'dark' ? 'dark' : 'default' });
@@ -1968,7 +2043,7 @@ function applyTheme(theme, save = true) {
     if (btn) btn.classList.toggle('active', t === theme);
   });
 
-  if (save) localStorage.setItem('reader-theme', theme);
+  if (save) localStorage.setItem('brief-theme', theme);
 }
 
 // ─── Copy Code ───
@@ -2370,7 +2445,7 @@ function hashDoc(str) {
     h = ((h << 5) - h) + str.charCodeAt(i);
     h |= 0;
   }
-  return 'reader-ann-' + h;
+  return 'brief-ann-' + h;
 }
 
 function getAnnotationOffset(annId) {
@@ -2583,7 +2658,7 @@ document.getElementById('url-input').addEventListener('keydown', e => {
 <script>
 if ('serviceWorker' in navigator) {
   const swCode = `
-    const CACHE = 'reader-v1';
+    const CACHE = 'brief-v1';
     const PRECACHE = [
       'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@700;900&display=swap',
       'https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js',
