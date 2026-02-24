@@ -285,6 +285,14 @@ document.head.appendChild(link);
 
   .url-go:active { opacity: 0.8; }
 
+  .drop-source {
+    color: var(--ink-faint);
+    font-size: var(--text-xs);
+    text-decoration: none;
+    letter-spacing: 0.05em;
+  }
+  .drop-source:hover { color: var(--ink-muted); }
+
   .drag-over #dropzone {
     background: var(--selection);
     outline: 2px dashed var(--accent);
@@ -1173,6 +1181,8 @@ document.head.appendChild(link);
     <input class="url-input" id="url-input" type="url" placeholder="https://raw.githubusercontent.com/…" />
     <button class="url-go" onclick="loadFromUrl()">Go</button>
   </div>
+
+  <a href="https://github.com/dereklucas/brief" class="drop-source">source</a>
 </main>
 
 <!-- Reader -->
