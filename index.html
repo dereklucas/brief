@@ -1317,8 +1317,9 @@ let savedRange = null;
 let activeAnnotationId = null;
 
 // ─── Folder State ───
-let folderFiles = {}; // path → markdown text
+let folderFiles = {};    // path → markdown text
 let currentFolderFile = '';
+let folderSource = '';   // stable label set at folder-load time, not overwritten by file nav
 
 // ─── GitHub ───
 let githubToken = localStorage.getItem('brief-github-token') || '';
@@ -1399,8 +1400,9 @@ async function handleGitHubPR(owner, repo, number) {
 
     const url = `https://github.com/${owner}/${repo}/pull/${number}`;
     currentDocSource = url;
+    folderSource = url;
     history.replaceState({ folderFile: '_index.md', inFolder: true }, '', '?url=' + encodeURIComponent(url));
-    loadFolderFile('_index.md', false);
+    loadFolderFile(await resolveStartFile(folderFiles), false);
   } catch (e) {
     showLoading(false);
     showError(e.message);
@@ -1472,12 +1474,13 @@ async function handleGitHubCommit(owner, repo, sha) {
 
     const url = `https://github.com/${owner}/${repo}/commit/${sha}`;
     currentDocSource = url;
+    folderSource = url;
     history.replaceState(
       { folderFile: '_index.md', inFolder: true },
       '',
       '?url=' + encodeURIComponent(url)
     );
-    loadFolderFile('_index.md', false);
+    loadFolderFile(await resolveStartFile(folderFiles), false);
   } catch (e) {
     showLoading(false);
     showError(e.message);
@@ -1568,17 +1571,73 @@ async function inflate(b64) {
   return new TextDecoder().decode(out);
 }
 
+// Storage for the last-open document.
+//
+// Single file  → 'brief-last' (compressed JSON with full content)
+// Folder       → 'brief-folder-index' (tiny JSON with paths + current)
+//                'brief-folder-file-{n}' per file (each compressed independently)
+//
+// Splitting folder files into separate entries means a large individual file
+// only loses itself if quota is hit, rather than taking down the whole session.
+
 async function saveLastDoc() {
-  try {
-    const data = Object.keys(folderFiles).length
-      ? { type: 'folder', files: folderFiles, current: currentFolderFile }
-      : { type: 'file', content: originalMarkdownText, filename: currentDocSource };
-    const compressed = await deflate(JSON.stringify(data));
-    localStorage.setItem('brief-last', compressed);
-  } catch (e) { /* quota exceeded or compression unavailable — silently skip */ }
+  if (Object.keys(folderFiles).length) {
+    // Save the index (small)
+    try {
+      localStorage.setItem('brief-folder-index', JSON.stringify({
+        source: folderSource,
+        paths: Object.keys(folderFiles),
+        current: currentFolderFile,
+      }));
+    } catch(e) { /* silently skip */ }
+
+    // Save each file independently so one oversized file can't block the rest
+    for (const [path, content] of Object.entries(folderFiles)) {
+      try {
+        const key = 'brief-folder-file-' + hashDoc(path);
+        localStorage.setItem(key, await deflate(content));
+      } catch(e) { /* file too large — skip this one, keep others */ }
+    }
+  } else {
+    // Single file
+    try {
+      const data = { type: 'file', content: originalMarkdownText, filename: currentDocSource };
+      localStorage.setItem('brief-last', await deflate(JSON.stringify(data)));
+    } catch(e) { /* silently skip */ }
+  }
 }
 
 async function restoreLastDoc() {
+  // ── Folder ──
+  const indexRaw = localStorage.getItem('brief-folder-index');
+  if (indexRaw) {
+    try {
+      const index = JSON.parse(indexRaw);
+      folderSource = index.source || '';
+      for (const path of (index.paths || [])) {
+        const key = 'brief-folder-file-' + hashDoc(path);
+        const compressed = localStorage.getItem(key);
+        if (compressed) {
+          try { folderFiles[path] = await inflate(compressed); } catch(e) {}
+        }
+      }
+      if (index.current && folderFiles[index.current]) {
+        currentFolderFile = index.current;
+        currentDocSource  = index.current;
+        history.replaceState(
+          { folderFile: index.current, inFolder: true },
+          '',
+          '#' + encodeURIComponent(index.current.split('/').pop())
+        );
+        loadFolderFile(index.current, false);
+        return;
+      }
+    } catch(e) {
+      localStorage.removeItem('brief-folder-index');
+    }
+  }
+
+  // ── Single file ──
   const saved = localStorage.getItem('brief-last');
   if (!saved) return;
   try {
@@ -1587,18 +1646,8 @@ async function restoreLastDoc() {
       currentDocSource = data.filename;
       history.replaceState(null, '', '#' + encodeURIComponent(data.filename));
       renderMarkdown(data.content, data.filename);
-    } else if (data.type === 'folder' && data.files) {
-      folderFiles = data.files;
-      currentFolderFile = data.current;
-      currentDocSource = data.current;
-      history.replaceState(
-        { folderFile: data.current, inFolder: true },
-        '',
-        '#' + encodeURIComponent(data.current.split('/').pop())
-      );
-      loadFolderFile(data.current, false);
     }
-  } catch (e) {
+  } catch(e) {
     localStorage.removeItem('brief-last');
   }
 }
@@ -1647,6 +1696,7 @@ async function handleFolder(dirEntry) {
     || paths[0];
 
   currentDocSource = dirEntry.name + '/' + start;
+  folderSource = dirEntry.name;
   history.replaceState(
     { folderFile: start, inFolder: true },
     '',
@@ -1693,6 +1743,22 @@ function setupFolderLinks() {
       a.style.cursor = 'pointer';
     }
   });
+}
+
+// After a GitHub re-fetch we'd normally always land on _index.md, losing the
+// user's place. This reads brief-last to restore the last file they were on,
+// as long as it still exists in the freshly-built folderFiles.
+async function resolveStartFile(availableFiles) {
+  try {
+    const saved = localStorage.getItem('brief-last');
+    if (saved) {
+      const data = JSON.parse(await inflate(saved));
+      if (data.type === 'folder' && data.current && availableFiles[data.current]) {
+        return data.current;
+      }
+    }
+  } catch(_) {}
+  return '_index.md';
 }
 
 function normalizePath(path) {
@@ -1872,7 +1938,13 @@ function parseFrontmatter(yaml) {
 
 function formatDate(str) {
   try {
-    return new Date(str).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+    // Date-only strings (YYYY-MM-DD) are parsed as UTC by the Date constructor,
+    // which shifts the displayed date in negative-offset timezones. Appending a
+    // local midnight time component keeps the date as the author intended.
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(str)
+      ? new Date(str + 'T00:00:00')
+      : new Date(str);
+    return d.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
   } catch(_) { return str; }
 }
 
@@ -1927,6 +1999,8 @@ function showDropzone() {
   currentDocSource = '';
   folderFiles = {};
   currentFolderFile = '';
+  folderSource = '';
+  localStorage.removeItem('brief-folder-index');
   history.replaceState(null, '', location.pathname);
   annotations = [];
   annotationCounter = 0;
@@ -2422,7 +2496,7 @@ function exportAnnotations() {
       .sort((a, b) => a.path.localeCompare(b.path));
     if (!allFiles.length) return;
 
-    let output = '<source>\n' + (currentDocSource || 'unknown') + '\n</source>\n\n';
+    let output = '<source>\n' + (folderSource || currentDocSource || 'unknown') + '\n</source>\n\n';
     output += '<annotations>\n';
     let n = 1;
     for (const { path, annotations: anns } of allFiles) {
@@ -2460,9 +2534,11 @@ function exportAnnotations() {
   // ── Single file ──
   if (!annotations.length) return;
 
+  const docTitle = document.getElementById('app-title').textContent;
   let output = '<source>\n';
-  output += currentDocSource || 'unknown document';
-  output += '\n</source>\n\n';
+  if (docTitle) output += docTitle + '\n';
+  if (currentDocSource && currentDocSource !== docTitle) output += currentDocSource + '\n';
+  output += '</source>\n\n';
   output += '<annotations>\n';
   annotations.forEach((ann, i) => {
     if (ann.type === 'strikethrough') {
@@ -2717,6 +2793,22 @@ function getTextNodesInRange(range) {
 
   return result;
 }
+
+// ─── Test API ───
+// Exposes internal `let` state for Playwright tests. No side effects in normal use.
+window.__brief__ = {
+  setFolderFiles(files) {
+    // Mutate in place — can't reassign a closed-over `let` from outside
+    for (const k in folderFiles) delete folderFiles[k];
+    Object.assign(folderFiles, files);
+  },
+  setCurrentFolderFile(path) { currentFolderFile = path; },
+  setFolderSource(src)       { folderSource = src; },
+  getAnnotations()           { return [...annotations]; },
+  getAllFolderAnnotations,
+  renderMarkdown,
+  saveLastDoc,
+};
 
 // ─── Folder Back/Forward Navigation ───
 window.addEventListener('popstate', e => {
