@@ -184,6 +184,7 @@ document.head.appendChild(link);
     padding: 40px 24px;
     text-align: center;
     gap: 24px;
+    position: relative;
   }
 
   .drop-icon {
@@ -286,11 +287,15 @@ document.head.appendChild(link);
   .url-go:active { opacity: 0.8; }
 
   .drop-source {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
     color: var(--ink-faint);
-    font-size: var(--text-xs);
     text-decoration: none;
-    letter-spacing: 0.05em;
+    line-height: 0;
+    transition: color 150ms ease;
   }
+  .drop-source svg { width: 18px; height: 18px; }
   .drop-source:hover { color: var(--ink-muted); }
 
   .drag-over #dropzone {
@@ -1182,7 +1187,9 @@ document.head.appendChild(link);
     <button class="url-go" onclick="loadFromUrl()">Go</button>
   </div>
 
-  <a href="https://github.com/dereklucas/brief" class="drop-source">source</a>
+  <a href="https://github.com/dereklucas/brief" class="drop-source" title="Source on GitHub" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.942.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
+  </a>
 </main>
 
 <!-- Reader -->
@@ -2401,12 +2408,56 @@ function removeAnnotation() {
 }
 
 function updateExportButton() {
-  const show = annotations.length > 0;
-  document.getElementById('btn-export').style.display = show ? '' : 'none';
-  document.getElementById('btn-clear').style.display = show ? '' : 'none';
+  const hasAnnotations = Object.keys(folderFiles).length
+    ? getAllFolderAnnotations().length > 0
+    : annotations.length > 0;
+  document.getElementById('btn-export').style.display = hasAnnotations ? '' : 'none';
+  document.getElementById('btn-clear').style.display = hasAnnotations ? '' : 'none';
 }
 
 function exportAnnotations() {
+  // ── Folder mode: collect annotations across all files ──
+  if (Object.keys(folderFiles).length) {
+    const allFiles = getAllFolderAnnotations()
+      .sort((a, b) => a.path.localeCompare(b.path));
+    if (!allFiles.length) return;
+
+    let output = '<source>\n' + (currentDocSource || 'unknown') + '\n</source>\n\n';
+    output += '<annotations>\n';
+    let n = 1;
+    for (const { path, annotations: anns } of allFiles) {
+      output += `\n## ${path}\n`;
+      anns.forEach(ann => {
+        if (ann.type === 'strikethrough') {
+          output += `${n}. [DELETE] "${ann.text}"\n`;
+        } else if (ann.type === 'checkbox') {
+          output += `${n}. [CHECK] "${ann.text}"\n`;
+        } else if (ann.type === 'note') {
+          output += `${n}. [NOTE] ${ann.comment}\n`;
+        } else {
+          output += `${n}. [COMMENT on "${ann.text}"] ${ann.comment}\n`;
+        }
+        n++;
+      });
+    }
+    output += '</annotations>\n\n';
+    output += 'Please apply these annotations to the source documents: remove text marked DELETE, check items marked CHECK, and address the feedback in each COMMENT.\n';
+
+    navigator.clipboard.writeText(output).then(() => {
+      showToast('Annotations copied to clipboard');
+    }).catch(() => {
+      const blob = new Blob([output], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'annotations.txt';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast('Annotations saved to file');
+    });
+    return;
+  }
+
+  // ── Single file ──
   if (!annotations.length) return;
 
   let output = '<source>\n';
@@ -2449,6 +2500,29 @@ function showToast(msg) {
 }
 
 // ─── Annotation Persistence ───
+
+// Returns [{path, annotations:[]}] for every folder file that has annotations.
+// Uses in-memory `annotations` for the current file (most up-to-date),
+// and localStorage for all other files.
+function getAllFolderAnnotations() {
+  if (!Object.keys(folderFiles).length) return [];
+  const result = [];
+  for (const [path, text] of Object.entries(folderFiles)) {
+    if (path === '_index.md') continue; // skip auto-generated index
+    if (path === currentFolderFile) {
+      if (annotations.length) result.push({ path, annotations: annotations.slice() });
+      continue;
+    }
+    const stored = localStorage.getItem(hashDoc(text));
+    if (!stored) continue;
+    try {
+      const data = JSON.parse(stored);
+      if (data.length) result.push({ path, annotations: data });
+    } catch(_) {}
+  }
+  return result;
+}
+
 function hashDoc(str) {
   let h = 0;
   for (let i = 0; i < str.length; i++) {
