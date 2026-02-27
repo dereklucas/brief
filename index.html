@@ -1402,7 +1402,7 @@ async function handleGitHubPR(owner, repo, number) {
     currentDocSource = url;
     folderSource = url;
     history.replaceState({ folderFile: '_index.md', inFolder: true }, '', '?url=' + encodeURIComponent(url));
-    loadFolderFile(await resolveStartFile(folderFiles), false);
+    loadFolderFile(resolveStartFile(folderFiles), false);
   } catch (e) {
     showLoading(false);
     showError(e.message);
@@ -1480,7 +1480,7 @@ async function handleGitHubCommit(owner, repo, sha) {
       '',
       '?url=' + encodeURIComponent(url)
     );
-    loadFolderFile(await resolveStartFile(folderFiles), false);
+    loadFolderFile(resolveStartFile(folderFiles), false);
   } catch (e) {
     showLoading(false);
     showError(e.message);
@@ -1647,7 +1647,7 @@ async function restoreLastDoc() {
     }
   }
 
-  // ── Single file (and legacy folder format) ──
+  // ── Single file ──
   const saved = localStorage.getItem('brief-last');
   if (!saved) return;
   try {
@@ -1656,18 +1656,6 @@ async function restoreLastDoc() {
       currentDocSource = data.filename;
       history.replaceState(null, '', '#' + encodeURIComponent(data.filename));
       renderMarkdown(data.content, data.filename);
-    } else if (data.type === 'folder' && data.files && data.current && data.files[data.current]) {
-      // Legacy format written before the per-file storage refactor — migrate it
-      folderSource = data.source || '';
-      folderFiles  = data.files;
-      currentFolderFile = data.current;
-      currentDocSource  = data.current;
-      history.replaceState(
-        { folderFile: data.current, inFolder: true },
-        '',
-        '#' + encodeURIComponent(data.current.split('/').pop())
-      );
-      loadFolderFile(data.current, false); // saveLastDoc inside will rewrite to new format
     }
   } catch(e) {
     localStorage.removeItem('brief-last');
@@ -1770,21 +1758,13 @@ function setupFolderLinks() {
 // After a GitHub re-fetch we'd normally always land on _index.md, losing the
 // user's place. This reads brief-folder-index to restore the last file they were
 // on, as long as it still exists in the freshly-built folderFiles.
-async function resolveStartFile(availableFiles) {
+function resolveStartFile(availableFiles) {
   try {
     const indexRaw = localStorage.getItem('brief-folder-index');
     if (indexRaw) {
       const index = JSON.parse(indexRaw);
       if (index.current && availableFiles[index.current]) {
         return index.current;
-      }
-    }
-    // Fall back to legacy format
-    const saved = localStorage.getItem('brief-last');
-    if (saved) {
-      const data = JSON.parse(await inflate(saved));
-      if (data.type === 'folder' && data.current && availableFiles[data.current]) {
-        return data.current;
       }
     }
   } catch(_) {}
