@@ -121,6 +121,70 @@ test('files with no annotations are omitted from folder export', async ({ page }
   expect(clip).not.toContain('## clean.md');
 });
 
+test('brief-folder-index is written and read on the real loadFolderFile path', async ({ page }) => {
+  // This test deliberately avoids the window.__brief__ shims and exercises the
+  // actual loadFolderFile → saveLastDoc → restoreLastDoc chain.
+  await page.goto('/');
+  const files = {
+    'notes.md': '# Notes\n\nThis gets struck.',
+    'other.md': '# Other\n\nNothing here.',
+  };
+
+  await page.evaluate(([files]) => {
+    window.__brief__.setFolderFiles(files);
+    window.__brief__.setFolderSource('MyDocs');
+    // loadFolderFile is a top-level function declaration, accessible on window
+    loadFolderFile('notes.md', false);
+  }, [files]);
+  await page.locator('#reader').waitFor({ state: 'visible' });
+
+  await annotate(page, 'gets struck', 'strike');
+  await expect(page.locator('.ann-strikethrough')).toBeVisible();
+
+  // Give the un-awaited saveLastDoc async chain time to flush
+  await page.waitForTimeout(200);
+
+  // Verify storage was written
+  const stored = await page.evaluate(() => ({
+    hasIndex:   localStorage.getItem('brief-folder-index') !== null,
+    hasFile:    localStorage.getItem('brief-folder-file-' + hashDoc('notes.md')) !== null,
+    hasOther:   localStorage.getItem('brief-folder-file-' + hashDoc('other.md')) !== null,
+    noLast:     localStorage.getItem('brief-last') === null,
+  }));
+  expect(stored.hasIndex).toBe(true);
+  expect(stored.hasFile).toBe(true);
+  expect(stored.hasOther).toBe(true);
+  expect(stored.noLast).toBe(true); // single-file key must be absent in folder mode
+
+  await page.reload();
+  await page.locator('#reader').waitFor({ state: 'visible', timeout: 5000 });
+  await expect(page.locator('#content h1')).toContainText('Notes');
+  await expect(page.locator('.ann-strikethrough')).toBeVisible();
+});
+
+test('switching to single-file mode clears brief-folder-index', async ({ page }) => {
+  await page.goto('/');
+  const files = { 'a.md': '# A\n\nContent.' };
+
+  await page.evaluate(([files]) => {
+    window.__brief__.setFolderFiles(files);
+    window.__brief__.setFolderSource('Folder');
+    loadFolderFile('a.md', false);
+  }, [files]);
+  await page.locator('#reader').waitFor({ state: 'visible' });
+  await page.waitForTimeout(200);
+
+  // folder index should exist
+  expect(await page.evaluate(() => localStorage.getItem('brief-folder-index'))).not.toBeNull();
+
+  // Now load a single file — folder state should be wiped
+  await loadFile(page, '# Solo\n\nJust a single file.', 'solo.md');
+  await page.waitForTimeout(200);
+
+  expect(await page.evaluate(() => localStorage.getItem('brief-folder-index'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('brief-last'))).not.toBeNull();
+});
+
 test('folder annotations survive a page reload', async ({ page }) => {
   await page.goto('/');
   const files = {

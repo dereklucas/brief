@@ -1525,6 +1525,10 @@ function openFile() {
 
 function handleFile(file) {
   if (!file) return;
+  // Leave folder mode — loading a single file is a mode switch
+  folderFiles = {};
+  currentFolderFile = '';
+  folderSource = '';
   const reader = new FileReader();
   reader.onload = e => {
     currentDocSource = file.name;
@@ -1582,7 +1586,10 @@ async function inflate(b64) {
 
 async function saveLastDoc() {
   if (Object.keys(folderFiles).length) {
-    // Save the index (small)
+    // Remove stale single-file entry so restoreLastDoc won't pick it up
+    localStorage.removeItem('brief-last');
+
+    // Save the index (small, synchronous)
     try {
       localStorage.setItem('brief-folder-index', JSON.stringify({
         source: folderSource,
@@ -1599,6 +1606,9 @@ async function saveLastDoc() {
       } catch(e) { /* file too large — skip this one, keep others */ }
     }
   } else {
+    // Remove stale folder entries so restoreLastDoc won't load an old session
+    localStorage.removeItem('brief-folder-index');
+
     // Single file
     try {
       const data = { type: 'file', content: originalMarkdownText, filename: currentDocSource };
@@ -1637,7 +1647,7 @@ async function restoreLastDoc() {
     }
   }
 
-  // ── Single file ──
+  // ── Single file (and legacy folder format) ──
   const saved = localStorage.getItem('brief-last');
   if (!saved) return;
   try {
@@ -1646,6 +1656,18 @@ async function restoreLastDoc() {
       currentDocSource = data.filename;
       history.replaceState(null, '', '#' + encodeURIComponent(data.filename));
       renderMarkdown(data.content, data.filename);
+    } else if (data.type === 'folder' && data.files && data.current && data.files[data.current]) {
+      // Legacy format written before the per-file storage refactor — migrate it
+      folderSource = data.source || '';
+      folderFiles  = data.files;
+      currentFolderFile = data.current;
+      currentDocSource  = data.current;
+      history.replaceState(
+        { folderFile: data.current, inFolder: true },
+        '',
+        '#' + encodeURIComponent(data.current.split('/').pop())
+      );
+      loadFolderFile(data.current, false); // saveLastDoc inside will rewrite to new format
     }
   } catch(e) {
     localStorage.removeItem('brief-last');
@@ -1746,10 +1768,18 @@ function setupFolderLinks() {
 }
 
 // After a GitHub re-fetch we'd normally always land on _index.md, losing the
-// user's place. This reads brief-last to restore the last file they were on,
-// as long as it still exists in the freshly-built folderFiles.
+// user's place. This reads brief-folder-index to restore the last file they were
+// on, as long as it still exists in the freshly-built folderFiles.
 async function resolveStartFile(availableFiles) {
   try {
+    const indexRaw = localStorage.getItem('brief-folder-index');
+    if (indexRaw) {
+      const index = JSON.parse(indexRaw);
+      if (index.current && availableFiles[index.current]) {
+        return index.current;
+      }
+    }
+    // Fall back to legacy format
     const saved = localStorage.getItem('brief-last');
     if (saved) {
       const data = JSON.parse(await inflate(saved));
